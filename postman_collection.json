@@ -1,0 +1,164 @@
+{
+  "info": {
+    "_postman_id": "b7f1c2a4-9d3e-4c6b-8a10-order-notify-0001",
+    "name": "Order, Notification & Analytics Services",
+    "description": "Order Service publishes order.created to Kafka.\nNotification Service (8001) and Analytics Service (8003) both consume it.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "order_url", "value": "http://localhost:8000"},
+    {"key": "notification_url", "value": "http://localhost:8001"},
+    {"key": "analytics_url", "value": "http://localhost:8003"},
+    {"key": "order_id", "value": ""},
+    {"key": "notification_id", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "Order Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{order_url}}/health", "host": ["{{order_url}}"], "path": ["health"]}
+          }
+        },
+        {
+          "name": "Create Order",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', function () {",
+                "    pm.response.to.have.status(200);",
+                "});",
+                "const body = pm.response.json();",
+                "if (body && body.id) {",
+                "    pm.collectionVariables.set('order_id', body.id);",
+                "    console.log('Saved order_id:', body.id);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_email\": \"alice@example.com\",\n    \"items\": [\n        { \"name\": \"Mechanical Keyboard\", \"qty\": 1, \"price\": 129.99 },\n        { \"name\": \"USB-C Cable\", \"qty\": 2, \"price\": 9.5 }\n    ]\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {"raw": "{{order_url}}/orders", "host": ["{{order_url}}"], "path": ["orders"]}
+          }
+        },
+        {
+          "name": "List Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{order_url}}/orders", "host": ["{{order_url}}"], "path": ["orders"]}
+          }
+        },
+        {
+          "name": "Get Order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{order_url}}/orders/{{order_id}}", "host": ["{{order_url}}"], "path": ["orders", "{{order_id}}"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notification Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{notification_url}}/health", "host": ["{{notification_url}}"], "path": ["health"]}
+          }
+        },
+        {
+          "name": "List Notifications",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('Status code is 200', function () {",
+                "    pm.response.to.have.status(200);",
+                "});",
+                "const body = pm.response.json();",
+                "if (Array.isArray(body) && body.length > 0) {",
+                "    pm.collectionVariables.set('notification_id', body[0].id);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{notification_url}}/notifications", "host": ["{{notification_url}}"], "path": ["notifications"]}
+          }
+        },
+        {
+          "name": "Get Notification",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{notification_url}}/notifications/{{notification_id}}", "host": ["{{notification_url}}"], "path": ["notifications", "{{notification_id}}"]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analytics Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{analytics_url}}/health", "host": ["{{analytics_url}}"], "path": ["health"]}
+          }
+        },
+        {
+          "name": "Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{analytics_url}}/analytics/summary", "host": ["{{analytics_url}}"], "path": ["analytics", "summary"]}
+          }
+        },
+        {
+          "name": "Top Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{analytics_url}}/analytics/top-products", "host": ["{{analytics_url}}"], "path": ["analytics", "top-products"]}
+          }
+        },
+        {
+          "name": "Top Customers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{analytics_url}}/analytics/top-customers", "host": ["{{analytics_url}}"], "path": ["analytics", "top-customers"]}
+          }
+        },
+        {
+          "name": "Recent Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {"raw": "{{analytics_url}}/analytics/events", "host": ["{{analytics_url}}"], "path": ["analytics", "events"]}
+          }
+        }
+      ]
+    }
+  ]
+}
