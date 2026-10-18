@@ -5,7 +5,6 @@ services:
     ports:
       - "9092:9092"
     environment:
-      # KRaft mode (no Zookeeper needed)
       - KAFKA_CFG_NODE_ID=0
       - KAFKA_CFG_PROCESS_ROLES=controller,broker
       - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
@@ -20,3 +19,24 @@ services:
       timeout: 10s
       retries: 5
       start_period: 20s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: kafka-demo-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: kafka
+      POSTGRES_PASSWORD: kafka
+      POSTGRES_DB: kafka_demo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docs/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kafka -d kafka_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
