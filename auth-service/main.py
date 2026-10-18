@@ -5,36 +5,32 @@ Responsibilities:
 1. Register users (email + password)
 2. Login → issue JWT access token
 3. Validate token (/me and /validate)
-
-Other services can call /validate or share the same JWT secret
-to protect endpoints (e.g. Create Order requires login).
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 import os
 
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import create_engine, Column, String, DateTime, Boolean
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from passlib.context import CryptContext
-from jose import JWTError, jwt
 
-# ---------- Config ----------
-SECRET_KEY = os.getenv("JWT_SECRET", "kafka-demo-secret-change-me-in-production")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+from security import (
+    create_access_token,
+    decode_token,
+    security,
+)
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "sqlite:///./auth.db",
+    "postgresql+psycopg2://postgres:postgres@localhost:5432/users",
 )
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = HTTPBearer()
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
@@ -70,25 +66,6 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
-
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (
-        expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def decode_token(token: str) -> dict:
-    try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
 
 
 class RegisterRequest(BaseModel):
