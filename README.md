@@ -1,130 +1,106 @@
-# Kafka Demo Project – Order → Notification + Analytics
+# Kafka Demo Project – Order → Notification + Analytics + Auth
 
-A simple but complete project to understand **Kafka** through a real use-case.
+Learn **Kafka**, **Auth (JWT)**, and **SQL/PostgreSQL** in one project.
 
 ---
 
 ## Architecture
 
 ```
-                        ┌───────────────────────┐
-                        │  Notification Svc    │  port 8001
-                        │  group: notification │
-                        └──────────▲───────────┘
-                                   │
-┌──────────────┐     order.created │
-│ Order Service│ ──────────────────├
-│  (Producer)  │     Kafka Topic   │
-│  port 8000   │ ──────────────────├
-└──────────────┘                   │
-                        ┌──────────▼───────────┐
-                        │  Analytics Service   │  port 8003
-                        │  group: analytics    │
-                        └──────────────────────┘
-```
+┌──────────────┐
+│ Auth Service │  port 8004  (register / login / JWT)
+└──────────────┘
 
-- **1 Producer** → Order Service
-- **2 Independent Consumers** → Notification + Analytics
-- Different consumer groups → each gets **all** messages
+┌──────────────┐     order.created      ┌──────────────────────┐
+│ Order Service│ ─────────────────────► │ Notification Service │ 8001
+│  port 8000   │         Kafka          └──────────────────────┘
+└──────────────┘              │
+                              └──────► ┌──────────────────────┐
+                                       │  Analytics Service   │ 8003
+                                       └──────────────────────┘
+
+┌──────────────┐
+│  PostgreSQL  │  port 5432  (users table – practice SQL here)
+└──────────────┘
+```
 
 ---
 
-## What you will learn
+## Services
 
-| Concept                  | Where you see it                                |
-|--------------------------|-------------------------------------------------|
-| Producer                 | Order Service                                   |
-| Consumer                 | Notification + Analytics                        |
-| Topic                    | `order.created`                                 |
-| Consumer Group           | Different groups = full copy of messages        |
-| Decoupling                | Services never call each other                  |
-| Idempotency              | `event_id` prevents duplicates                  |
-| Message durability       | Messages stay even if consumer is down          |
-| Catch-up / Recovery      | Consumer processes missed messages later        |
+| Service        | Port | Role                                      |
+|----------------|------|-------------------------------------------|
+| Order          | 8000 | Producer – creates orders, publishes events |
+| Notification   | 8001 | Consumer – creates notifications          |
+| Analytics      | 8003 | Consumer – summary, top products/customers |
+| Auth           | 8004 | Register, login, JWT, validate token      |
+| Kafka          | 9092 | Message broker                            |
+| PostgreSQL     | 5432 | DB for Auth (and SQL practice)            |
 
 ---
 
 ## Quick Start
 
-### 1. Start Kafka
+### 1. Infrastructure
 ```bash
-cd kafka-demo
 docker compose up -d
 ```
 
-### 2. Install dependencies
+### 2. Install deps
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Start the 3 services (3 terminals)
+### 3. Start services
 
-**Terminal 1 – Order Service (Producer)**
 ```bash
-cd order-service
-uvicorn main:app --port 8000 --reload
+# Auth (optional: point at Postgres)
+cd auth-service
+# Windows:  $env:DATABASE_URL="postgresql://kafka:kafka@localhost:5432/kafka_demo"
+# Linux:    export DATABASE_URL="postgresql://kafka:kafka@localhost:5432/kafka_demo"
+uvicorn main:app --port 8004 --reload
+
+# Order
+cd order-service && uvicorn main:app --port 8000 --reload
+
+# Notification
+cd notification-service && uvicorn main:app --port 8001 --reload
+
+# Analytics
+cd analytics-service && uvicorn main:app --port 8003 --reload
 ```
 
-**Terminal 2 – Notification Service**
-```bash
-cd notification-service
-uvicorn main:app --port 8001 --reload
-```
-
-**Terminal 3 – Analytics Service**
-```bash
-cd analytics-service
-uvicorn main:app --port 8003 --reload
-```
-
-### 4. Run tests
-```bash
-cd scripts
-python bulk_test.py --count 10
-python test_recovery.py --count 5
-python bulk_stress_test.py --count 30
-```
+Auth works with SQLite by default if you skip `DATABASE_URL`.
 
 ---
 
-## Analytics Endpoints
+## Auth API
 
 ```bash
-# Summary (total orders, revenue, avg order value, unique customers)
-curl http://localhost:8003/analytics/summary
-
-# Top products by revenue
-curl http://localhost:8003/analytics/top-products
-
-# Top customers by spending
-curl http://localhost:8003/analytics/top-customers
-
-# Recent events
-curl http://localhost:8003/analytics/events
-```
-
----
-
-## Manual testing
-
-```bash
-# Create an order
-curl -X POST http://localhost:8000/orders \
+# Register
+curl -X POST http://localhost:8004/auth/register \
   -H "Content-Type: application/json" \
-  -d '{
-    "user_email": "ahmed@example.com",
-    "items": [
-      {"name": "Laptop", "qty": 1, "price": 1200},
-      {"name": "Mouse", "qty": 2, "price": 25}
-    ]
-  }'
+  -d '{"email":"alice@example.com","password":"secret123","full_name":"Alice"}'
 
-# Check notification
-curl http://localhost:8001/notifications
+# Login
+curl -X POST http://localhost:8004/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"secret123"}'
 
-# Check analytics
-curl http://localhost:8003/analytics/summary
-curl http://localhost:8003/analytics/top-products
+# Me
+curl http://localhost:8004/auth/me -H "Authorization: Bearer <token>"
+```
+
+---
+
+## Learn SQL
+
+See **[docs/SQL_LEARNING.md](docs/SQL_LEARNING.md)**.
+
+```bash
+docker exec -it kafka-demo-postgres psql -U kafka -d kafka_demo
+\dt
+SELECT * FROM users;
 ```
 
 ---
@@ -135,19 +111,12 @@ curl http://localhost:8003/analytics/top-products
 kafka-demo/
 ├── docker-compose.yml
 ├── requirements.txt
-├── README.md
-├── order-service/
-│   └── main.py                 # Producer (port 8000)
-├── notification-service/
-│   └── main.py                 # Consumer (port 8001)
-├── analytics-service/
-│   └── main.py                 # Consumer (port 8003)
+├── docs/SQL_LEARNING.md
+├── auth-service/main.py          # port 8004
+├── order-service/main.py
+├── notification-service/main.py
+├── analytics-service/main.py
 └── scripts/
-    ├── bulk_test.py
-    ├── test_recovery.py
-    └── bulk_stress_test.py
 ```
-
----
 
 Happy learning! 🚀
